@@ -1,0 +1,23 @@
+{
+  "name": "homebridge-platform-orbit",
+  "main": "index.js",
+  "dependencies": {
+    "request": "^2.81.0",
+    "ws": "^7.0.0"
+  },
+  "engines": {
+    "homebridge": ">=0.4.0",
+    "node": ">=8.6.0"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "homekit",
+    "orbit",
+    "bhyve"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mortjc/homebridge-platform-orbit.git"
+  }
+}
