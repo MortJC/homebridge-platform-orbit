@@ -1,6 +1,6 @@
 const PlatformOrbit = require('./platform');
 const PluginName = 'homebridge-platform-orbit';
-const PlatformName = 'Orbit';
+const PlatformName = 'orbit';
 
 module.exports = (homebridge) => {
   global.Accessory = homebridge.platformAccessory;
