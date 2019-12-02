@@ -2,6 +2,7 @@ const PluginName = 'homebridge-platform-orbit';
 const PlatformName = 'orbit';
 const request = require("request");
 const WebSocket = require("ws");
+const cache = require('memory-cache');
 
 class PlatformOrbit {
 
@@ -14,6 +15,7 @@ class PlatformOrbit {
     this.token = null;
     this.id = null;
     this.accessories = [];
+    this.memCache = new cache.Cache();
 
     this.log('Starting OrbitPlatform using homebridge API', api.version);
     if (api) {
@@ -33,25 +35,6 @@ class PlatformOrbit {
         }.bind(this));
       }.bind(this));
     }
-  }
-
-  configureAccessory(accessory) {
-    // Configure handlers for cache accessories
-    this.log('Remembered accessory, configuring handlers', accessory.displayName);
-    this.accessories[accessory.UUID] = accessory;
-
-    // Configure Irrigation Service
-    this._configureIrrigationService(accessory);
-
-    accessory.services.forEach(function (service) {
-      //this.log.debug(service);
-
-      if (Service.Valve.UUID === service.UUID){
-
-        // Configure Valve Services
-        this._configureValve(service);
-      }
-    }.bind(this));
   }
 
   _login(callback) {
@@ -74,12 +57,14 @@ class PlatformOrbit {
       },
     }, function (err, response, body) {
       if (!err && response.statusCode == 200) {
+
+        // Save user_id and orbit_api_key
         this.user = body['user_id'];
         this.token = body['orbit_api_key'];
-        this.log.info('Logged into Orbit BHyve API with user_id =', this.user, ', orbit_api_key =', this.token);
+        this.log.info('Logged into Orbit API with user_id =', this.user, ', orbit_api_key =', this.token);
         callback();
       } else {
-        this.log.error('Failed to login to Orbit BHyve API');
+        this.log.error('Failed to login to Orbit API');
       }
     }.bind(this));
   }
@@ -88,37 +73,30 @@ class PlatformOrbit {
     this.log.debug("Fetch the devices");
 
     // Get the device details
-    request.get({
-      url: "https://api.orbitbhyve.com/v1/devices?user_id=" + this.user,
-      headers: {
-        "Accept": "application/json",
-        "orbit-api-key": this.token,
-        "orbit-app-id": "Orbit Support Dashboard"
-      }
-    }, function (err, response, body) {
-      if (!err && response.statusCode == 200) {
-        body = JSON.parse(body);
-        body.forEach(function (result) {
+    this._cachedDevicesRequest(function (err, response, body) {
+      if (!err && (!response || response.statusCode == 200)) {
+        let jsonBody = JSON.parse(body);
+        jsonBody.forEach(function (result) {
           if (result['type'] == "sprinkler_timer") {
-            this.log.info("Found sprinkler '" + result['name'] + "' with id " + result['id']);
+            this.log.debug("Found sprinkler '" + result['name'] + "' with id " + result['id']);
 
             // Generate irrigation service uuid
             var uuid = UUIDGen.generate(result['id']);
 
             if (this.accessories[uuid]) {
-              this.log.info('Device already exists in cache');
+              this.log.debug('Device already exists in accessory cache');
             }
             else {
-              this.log.info('Creating and configuring new device');
+              this.log.debug('Creating and configuring new device');
 
               // Create and configure Irrigation Service
-              var newAccessory = this._createIrrigationService(uuid, result['name'], result['name'], result['firmware_version'], result['is_connected'], result['status']['runmode']);
-              this._configureIrrigationService(newAccessory);
+              var newAccessory = this._createIrrigationService(uuid, result['id'], result['name'], result['hardware_version'], result['firmware_version'], result['is_connected'], result['status']['runmode']);
+              this._configureIrrigationService(newAccessory, result['id']);
 
               // Create and configure Values services and link to Irrigation Service
               result['zones'].forEach(function (zone) {
-                var valve = this._createValve(zone['name'], zone['station']);
-                this._configureValve(valve);
+                var valve = this._createValveService(zone['station'], zone['name']);
+                this._configureValveService(valve, result['id'], zone['station']);
                 newAccessory.getService(Service.IrrigationSystem).addLinkedService(valve);
                 newAccessory.addService(valve);
               }.bind(this));
@@ -136,74 +114,96 @@ class PlatformOrbit {
     }.bind(this));
   }
 
-  _createIrrigationService(uuid, name, hardware_version, firmware_version, is_connected, runmode) {
-    this.log.debug('Create Irrigation service', name);
+  configureAccessory(accessory) {
+    // Configure handlers for cache accessories
+    this.log('Remembered accessory, configuring handlers', accessory.displayName);
+    this.accessories[accessory.UUID] = accessory;
 
-    let newAccessory = new Accessory(name, uuid);
-    newAccessory.addService(Service.IrrigationSystem, name);
-    newAccessory.updateReachability(true);
+    // Configure Irrigation Service
+    this._configureIrrigationService(accessory, accessory.getService(Service.AccessoryInformation).getCharacteristic(Characteristic.SerialNumber).value);
+
+    // Find the valve Services
+    accessory.services.forEach(function (service) {
+      if (Service.Valve.UUID === service.UUID) {
+
+        // Configure Valve Service
+        this._configureValveService(service, accessory.getService(Service.AccessoryInformation).getCharacteristic(Characteristic.SerialNumber).value, service.getCharacteristic(Characteristic.ServiceLabelIndex).value);
+      }
+    }.bind(this));
+  }
+
+  _createIrrigationService(uuid, id, name, hardware_version, firmware_version, is_connected, runmode) {
+    this.log.debug('Create Irrigation service', id);
+
+    // Create new Irrigation System Service
+    let irigationSystem = new Accessory(name, uuid);
+    irigationSystem.addService(Service.IrrigationSystem, name);
+    irigationSystem.updateReachability(true);
 
     // Check if the device is connected
     if (is_connected == true) {
-      newAccessory.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.NO_FAULT);
+      irigationSystem.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.NO_FAULT);
     } else {
-      newAccessory.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.GENERAL_FAULT);
+      irigationSystem.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.GENERAL_FAULT);
     }
 
     // Set the Program Mode
     switch (runmode) {
       case "auto":
-        newAccessory.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.PROGRAM_SCHEDULED);
+        irigationSystem.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.PROGRAM_SCHEDULED);
         break;
       case "manual":
-        newAccessory.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.PROGRAM_SCHEDULED_MANUAL_MODE_);
+        irigationSystem.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.PROGRAM_SCHEDULED_MANUAL_MODE_);
         break;
       case "off":
-        newAccessory.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.NO_PROGRAM_SCHEDULED);
+        irigationSystem.getService(Service.IrrigationSystem).setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.NO_PROGRAM_SCHEDULED);
         break;
     }
 
     // Create AccessoryInformation Service
-    newAccessory.getService(Service.AccessoryInformation)
+    irigationSystem.getService(Service.AccessoryInformation)
       .setCharacteristic(Characteristic.Name, name)
       .setCharacteristic(Characteristic.Manufacturer, "Orbit")
+      .setCharacteristic(Characteristic.SerialNumber, id)
       .setCharacteristic(Characteristic.Model, hardware_version)
       .setCharacteristic(Characteristic.FirmwareRevision, firmware_version);
 
-    return newAccessory;
+    return irigationSystem;
   }
 
-  _configureIrrigationService(newAccessory) {
-    this.log.debug('Configure Irrigation service', newAccessory.getService(Service.IrrigationSystem).getCharacteristic(Characteristic.Name).value)
+  _configureIrrigationService(irrigationSystem, id) {
+    this.log.debug('Configure Irrigation service', id, irrigationSystem.getService(Service.AccessoryInformation).getCharacteristic(Characteristic.Name).value)
 
-    // Create IrrigationSystem Service
-    newAccessory.getService(Service.IrrigationSystem)
+    // Configure IrrigationSystem Service
+    irrigationSystem.getService(Service.IrrigationSystem)
       .setCharacteristic(Characteristic.Active, Characteristic.Active.ACTIVE)
       .setCharacteristic(Characteristic.InUse, Characteristic.InUse.NOT_IN_USE)
       .setCharacteristic(Characteristic.RemainingDuration, 0)
       .setCharacteristic(Characteristic.ProgramMode, Characteristic.ProgramMode.NO_PROGRAM_SCHEDULED);
 
-    newAccessory.getService(Service.IrrigationSystem)
+    irrigationSystem.getService(Service.IrrigationSystem)
       .getCharacteristic(Characteristic.Active)
-      .on('get', this._getDevice.bind(this, "DeviceActive"));
-    //on('set', this._setValue.bind(this, "DeviceActive"));
+      .on('get', this._getValue.bind(this, id, 0, "DeviceActive"));
+    //on('set', this._setValue.bind(this, id, 0, "DeviceActive"));
 
-    newAccessory.getService(Service.IrrigationSystem)
-      .getCharacteristic(Characteristic.ProgramMode)
-      .on('get', this._getDevice.bind(this, "DeviceProgramMode"));
-
-    newAccessory.getService(Service.IrrigationSystem)
+    irrigationSystem.getService(Service.IrrigationSystem)
       .getCharacteristic(Characteristic.InUse)
-      .on('get', this._getDevice.bind(this, "DeviceInUse"));
-    //.on('set', this._setValue.bind(this, "DeviceInUse"));
+      .on('get', this._getValue.bind(this, id, 0, "DeviceInUse"));
+    //.on('set', this._setValue.bind(this, id, 0, "DeviceInUse"));
 
-    newAccessory.getService(Service.IrrigationSystem)
+    irrigationSystem.getService(Service.IrrigationSystem)
+      .getCharacteristic(Characteristic.ProgramMode)
+      .on('get', this._getValue.bind(this, id, 0, "DeviceProgramMode"));
+
+    irrigationSystem.getService(Service.IrrigationSystem)
       .getCharacteristic(Characteristic.RemainingDuration)
-      .on('get', this._getDevice.bind(this, "DeviceRemainingDuration"));
+      .on('get', this._getValue.bind(this, id, 0, "DeviceRemainingDuration"));
   }
 
-  _createValve(name, id) {
-    this.log.debug("Create Valve service '" + name + "' with id " + id);
+  _createValveService(id, name) {
+    this.log.debug("Create Valve service" + name + " with id " + id);
+
+    // Create Vavle Service
     let valve = new Service.Valve(name, id);
     valve
       .setCharacteristic(Characteristic.Active, Characteristic.Active.INACTIVE)
@@ -219,180 +219,209 @@ class PlatformOrbit {
     return valve
   }
 
-  _configureValve(valve, id) {
-    this.log.debug("Configure Valve service", valve.getCharacteristic(Characteristic.Name).value);
+  _configureValveService(valve, deviceId, id) {
+    this.log.debug("Configure Valve service", deviceId, id, valve.getCharacteristic(Characteristic.Name).value);
 
-    var id = valve.getCharacteristic(Characteristic.ServiceLabelIndex).value;
-
+    // Configure Valve Service
     valve
       .getCharacteristic(Characteristic.Active)
-      .on('get', this._getValve.bind(this, "ValveActive", id));
+      .on('get', this._getValue.bind(this, deviceId, id, "ValveActive"));
     //.on('set', this._setValue.bind(this, "ValveActive", id));
 
     valve
       .getCharacteristic(Characteristic.InUse)
-      .on('get', this._getValve.bind(this, "ValveInUse", id));
-    //.on('set', this._setValue.bind(this, "ValveInUse", id));
+      .on('get', this._getValue.bind(this, deviceId, id, "ValveInUse"));
+    //.on('set', this._setValue.bind(this, deviceId, id, "ValveInUse"));
 
     valve
       .getCharacteristic(Characteristic.SetDuration)
-      .on('get', this._getValve.bind(this, "ValveSetDuration", id));
-    //.on('set', this._setValue.bind(this, "ValveSetDuration", id));
+      .on('get', this._getValue.bind(this, deviceId, id, "ValveSetDuration"));
+    //.on('set', this._setValue.bind(this, deviceId, id, "ValveSetDuration"));
 
     valve
       .getCharacteristic(Characteristic.RemainingDuration)
-      .on('get', this._getValve.bind(this, "ValveRemainingDuration", id));
+      .on('get', this._getValue.bind(this, deviceId, id, "ValveRemainingDuration"));
   }
 
-  _getDevice(CharacteristicName, callback) {
-    this.log.debug("getDevice", CharacteristicName);
-    switch (CharacteristicName) {
+  _getValue(deviceId, valveId, characteristicName, callback) {
+
+    this.log.debug("GET getValue", deviceId, valveId, characteristicName);
+
+    switch (characteristicName) {
+
       case "DeviceActive":
+        this.log.debug("DeviceActive = ACTIVE");
         callback(null, Characteristic.Active.ACTIVE);
         break;
+
       case "DeviceProgramMode":
-        callback(null, Characteristic.ProgramMode.NO_PROGRAM_SCHEDULED);
+        this.log.debug("DeviceProgramMode = PROGRAM_SCHEDULED");
+        callback(null, Characteristic.ProgramMode.PROGRAM_SCHEDULED);
         break;
+
       case "DeviceInUse":
+        this.log.debug("DeviceInUse = NOT_IN_USE");
         callback(null, Characteristic.InUse.NOT_IN_USE);
         break;
+
       case "DeviceRemainingDuration":
+        this.log.debug("DeviceRemainingDuration = 0");
         callback(null, 0);
+        //callback(null, this.IrrigationSystem.getCharacteristic(Characteristic.RemainingDuration).value);
         break;
-      default:
-        this.log("Unknown CharacteristicName called", CharacteristicName);
-        callback();
-        break;
-    }
-  }
 
-  _getValve(CharacteristicName, stationId, callback) {
-    this.log.debug("getValve", stationId, CharacteristicName);
-    switch (CharacteristicName) {
       case "ValveActive":
+        this.log.debug("ValveActive = INACTIVE");
         callback(null, Characteristic.Active.INACTIVE);
+        //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.Active).value);
         break;
+
       case "ValveInUse":
+        this.log.debug("ValveInUse = NOT_IN_USE");
         callback(null, Characteristic.InUse.NOT_IN_USE);
+        //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.InUse).value);
         break;
+
       case "ValveSetDuration":
+        this.log.debug("ValveSetDuration = 0");
         callback(null, 0);
+        //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.SetDuration).value);
         break;
+
       case "ValveRemainingDuration":
+        this.log.debug("ValveRemainingDuration = 0");
         callback(null, 0);
+        //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.RemainingDuration).value);
         break;
+
       default:
-        this.log("Unknown CharacteristicName called", CharacteristicName);
+        this.log.debug("Unknown CharacteristicName called", characteristicName);
         callback();
         break;
     }
   }
 
-  _getValue2(CharacteristicName, stationId, callback) {
-    this.log("GET Station", stationId, CharacteristicName);
-    switch (CharacteristicName) {
-      case "!DeviceActive":
-        // Get the device details
-        request.get({
-          url: "https://api.orbitbhyve.com/v1/devices?user_id=" + this.user,
-          headers: {
-            "Accept": "application/json",
-            "orbit-api-key": this.token,
-            "orbit-app-id": "Orbit Support Dashboard"
-          }
-        }, function (err, response, body) {
-          if (!err && response.statusCode == 200) {
-            body = JSON.parse(body);
-            body.forEach(function (result) {
-              if (result['type'] == "sprinkler_timer") {
-                this.id = result['id'];
-                this.log("Found sprinkler '" + this.name + "' with id " + result['id'] + " and state " + result['status']['watering_status']);
+  _getValue2(deviceId, valveId, characteristicName, callback) {
 
-                // If the water is running
+    this.log.debug("GET getValue", deviceId, valveId, characteristicName);
+
+    this._cachedDevicesRequest(function (err, response, body) {
+
+      if (!err && (!response || response.statusCode == 200)) {
+        let jsonBody = JSON.parse(body);
+
+        // for each device found check it matches the one we are looking for
+        jsonBody.forEach(function (result) {
+          if (result['id'] == deviceId) {
+            this.log.debug("Found device with id " + result['id']);
+
+            switch (characteristicName) {
+
+              case "DeviceActive":
+                this.log.debug("DeviceActive = ACTIVE");
+                callback(null, Characteristic.Active.ACTIVE);
+                break;
+
+              case "DeviceProgramMode":
+                switch (result['status']['runmode']) {
+                  case "auto":
+                    this.log.debug("DeviceProgramMode = PROGRAM_SCHEDULED");
+                    callback(null, Characteristic.ProgramMode.PROGRAM_SCHEDULED);
+                    break;
+                  case "manual":
+                    this.log.debug("DeviceProgramMode = PROGRAM_SCHEDULED_MANUAL_MODE_");
+                    callback(null, Characteristic.ProgramMode.PROGRAM_SCHEDULED_MANUAL_MODE_);
+                    break;
+                  case "off":
+                    this.log.debug("DeviceProgramMode = NO_PROGRAM_SCHEDULED");
+                    callback(null, Characteristic.ProgramMode.NO_PROGRAM_SCHEDULED);
+                    break;
+                }
+                break;
+
+              case "DeviceInUse":
                 if (result['status']['watering_status']) {
-                  this.log("Water is running in " + result['status']['run_mode'] + " mode");
-                  // Try / catch statement will catch us when the API is down
-                  try {
-                    // Calculate the RemainingDuration & SetDuration
-                    var time_current = new Date();
-                    var time_remaining = new Date(result['status']['watering_status']['started_watering_station_at']);
-                    time_remaining.setSeconds(time_remaining.getSeconds() + (result['status']['watering_status']['stations'][0]['run_time'] * 60));
-                    var tempRemainingDuration = Math.round((time_remaining.getTime() - time_current.getTime()) / 1000);
-                    for (var i = 1; i <= this.zones; i++) {
-                      if (i == result['status']['watering_status']['stations'][0]['station']) {
-                        this.Valve[i].getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.ACTIVE);
-                        this.Valve[i].getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.IN_USE);
-                        this.Valve[i].getCharacteristic(Characteristic.RemainingDuration).updateValue(tempRemainingDuration);
-                      } else {
-                        this.Valve[i].getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.INACTIVE);
-                        this.Valve[i].getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
-                        this.Valve[i].getCharacteristic(Characteristic.RemainingDuration).updateValue(0);
-                      }
-                    }
-                  } catch (err) {
-                    this.log("Could not find calculate the remaining duration, assuming default duration");
-                  }
+                  this.log.debug("DeviceInUse = IN_USE");
+                  callback(null, Characteristic.InUse.IN_USE);
                 }
-                // If the water is not running
                 else {
-                  this.log("Water is NOT running");
-                  for (var i = 1; i <= this.zones; i++) {
-                    this.Valve[i].getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
-                    // Set the preferred run Duration
-                    //if(result['manual_preset_runtime_sec'] != 0) {
-                    //	this.Valve[i].getCharacteristic(Characteristic.SetDuration).updateValue(result['manual_preset_runtime_sec']);
-                    //}
-                  }
+                  this.log.debug("DeviceInUse = NOT_IN_USE");
+                  callback(null, Characteristic.InUse.NOT_IN_USE);
                 }
-              }
-            }.bind(this));
-          } else {
-            this.log("Could not get Orbit B-Hyve device details");
+                break;
+
+              case "DeviceRemainingDuration":
+                this.log.debug("DeviceRemainingDuration = 0");
+                callback(null, 0);
+                //callback(null, this.IrrigationSystem.getCharacteristic(Characteristic.RemainingDuration).value);
+                break;
+
+              case "ValveActive":
+                this.log.debug("ValveActive = INACTIVE");
+                callback(null, Characteristic.Active.INACTIVE);
+                //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.Active).value);
+                break;
+
+              case "ValveInUse":
+                this.log.debug("ValveInUse = NOT_IN_USE");
+                callback(null, Characteristic.InUse.NOT_IN_USE);
+                //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.InUse).value);
+                break;
+
+              case "ValveSetDuration":
+                this.log.debug("ValveSetDuration = 0");
+                callback(null, 0);
+                //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.SetDuration).value);
+                break;
+
+              case "ValveRemainingDuration":
+                this.log.debug("ValveRemainingDuration = 0");
+                callback(null, 0);
+                //callback(null, this.Valve[valveId].getCharacteristic(Characteristic.RemainingDuration).value);
+                break;
+
+              default:
+                this.log.debug("Unknown CharacteristicName called", characteristicName);
+                callback();
+                break;
+            }
+
           }
         }.bind(this));
-        callback(null, Characteristic.Active.ACTIVE);
-        break;
-      case "DeviceProgramMode":
-        this.log("DeviceProgramMode =", this.IrrigationSystem.getCharacteristic(Characteristic.ProgramMode).value);
-        callback(null, this.IrrigationSystem.getCharacteristic(Characteristic.ProgramMode).value);
-        break;
-      case "DeviceActive":
-        //this.log("DeviceActive =", this.IrrigationSystem.getCharacteristic(Characteristic.Active).value);
-        //callback(null, this.IrrigationSystem.getCharacteristic(Characteristic.Active).value);
-        callback(null, Characteristic.Active.ACTIVE);
-        break;
-      case "DeviceInUse":
-        this.log("DeviceInUse =", this.IrrigationSystem.getCharacteristic(Characteristic.InUse).value);
-        callback(null, this.IrrigationSystem.getCharacteristic(Characteristic.InUse).value);
-        break;
-      case "DeviceRemainingDuration":
-        this.log("DeviceRemainingDuration =", this.IrrigationSystem.getCharacteristic(Characteristic.RemainingDuration).value);
-        callback(null, this.IrrigationSystem.getCharacteristic(Characteristic.RemainingDuration).value);
-        break;
-      case "ValveActive":
-        this.log("ValveActive =", this.Valve[stationId].getCharacteristic(Characteristic.Active).value);
-        callback(null, this.Valve[stationId].getCharacteristic(Characteristic.Active).value);
-        break;
-      case "ValveInUse":
-        this.log("ValveInUse =", this.Valve[stationId].getCharacteristic(Characteristic.InUse).value);
-        callback(null, this.Valve[stationId].getCharacteristic(Characteristic.InUse).value);
-        break;
-      case "ValveSetDuration":
-        this.log("ValveSetDuration =", this.Valve[stationId].getCharacteristic(Characteristic.SetDuration).value);
-        callback(null, this.Valve[stationId].getCharacteristic(Characteristic.SetDuration).value);
-        break;
-      case "ValveRemainingDuration":
-        this.log("ValveRemainingDuration =", this.Valve[stationId].getCharacteristic(Characteristic.RemainingDuration).value);
-        callback(null, this.Valve[stationId].getCharacteristic(Characteristic.RemainingDuration).value);
-        break;
-      default:
-        this.log("Unknown CharacteristicName called", CharacteristicName);
-        callback();
-        break;
+      } else {
+        this.log("Could not get device details");
+      }
+    }.bind(this));
+  }
+
+  _cachedDevicesRequest(callback) {
+    let apiUrl = "https://api.orbitbhyve.com/v1/devices";
+    let apiHeaders = {
+      "Accept": "application/json",
+      "orbit-app-id": "Orbit Support Dashboard",
+      "orbit-api-key": this.token
+    }
+
+    // Get device details using 30 sec cache
+    let cacheContent = this.memCache.get(apiUrl);
+    if (cacheContent) {
+      callback(null, null, cacheContent);
+    }
+    else {
+      request.get({
+        url: apiUrl,
+        headers: apiHeaders
+      }, function (err, response, body) {
+
+        if (!err && response.statusCode == 200) {
+          this.memCache.put(apiUrl, body, 300000);
+          callback(err, response, body);
+        }
+      }.bind(this));
     }
   }
 
-  _setValue2(CharacteristicName, stationId, value, callback) {
+  _setValue(CharacteristicName, stationId, value, callback) {
     this.log("SET", CharacteristicName, "Value", value, "Station", stationId);
     switch (CharacteristicName) {
       case "DeviceActive":
@@ -479,6 +508,7 @@ class PlatformOrbit {
         break;
     }
   }
+
 }
 
 module.exports = PlatformOrbit;
