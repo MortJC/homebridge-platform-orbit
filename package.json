@@ -1,5 +1,7 @@
 {
   "name": "homebridge-platform-orbit",
+  "version": "1.0.0",
+  "description": "Orbit Platform plugin for [HomeBridge](https://github.com/nfarina/homebridge).",
   "main": "index.js",
   "dependencies": {
     "request": "^2.81.0",
@@ -9,15 +11,24 @@
     "homebridge": ">=0.4.0",
     "node": ">=8.6.0"
   },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MortJC/homebridge-platform-orbit.git"
+  },
   "keywords": [
     "homebridge-plugin",
     "homekit",
     "orbit",
-    "bhyve"
+    "bhyve",
+    "irrigation"
   ],
+  "author": "James Carvosso",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mortjc/homebridge-platform-orbit.git"
-  }
+  "bugs": {
+    "url": "https://github.com/MortJC/homebridge-platform-orbit/issues"
+  },
+  "homepage": "https://github.com/MortJC/homebridge-platform-orbit#readme"
 }

@@ -388,7 +388,10 @@ class PlatformOrbit {
               // Calculate the RemainingDuration & SetDuration
               let currentTime = new Date();
               let startTime = new Date(result['status']['watering_status']['started_watering_station_at']);
-              let setDuration = (result['status']['watering_status']['stations'][0]['run_time'] * 60);
+              let setDuration = 0;
+              if (result['status']['watering_status']['stations'][0]['run_time']) {
+                setDuration = (result['status']['watering_status']['stations'][0]['run_time'] * 60);
+              }
               startTime.setSeconds(startTime.getSeconds() + setDuration);
               let remainingDuration = Math.round((startTime.getTime() - currentTime.getTime()) / 1000);
 
