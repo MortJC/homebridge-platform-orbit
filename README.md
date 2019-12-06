@@ -9,8 +9,11 @@ Orbit Irrigation System platform plugin for [HomeBridge](https://github.com/nfar
 
 ## Config.json example
 
-    {
-      "platform": "orbit",
-      "email": "joe.blogs@gmail.com",
-      "password": "MySecretPassword"
-    }
+	"platforms": [
+		{
+			"platform": "orbit",
+			"name" : "orbit",
+            "email": "joe.blogs@gmail.com",
+            "password": "MySecretPassword"
+		}
+	]
