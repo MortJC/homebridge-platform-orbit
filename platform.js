@@ -50,7 +50,10 @@ class PlatformOrbit {
 
               // Check if device is already loaded from cache
               if (this.accessories[uuid]) {
-                this.log.debug('Device already exists in accessory cache');
+                this.log.debug('Configuring cached device');
+
+                // Configure Irrigation Service
+                this._configureIrrigationService(this.accessories[uuid].getService(Service.IrrigationSystem));
 
                 // Find the valve Services
                 this.accessories[uuid].services.forEach(function (service) {
@@ -80,7 +83,6 @@ class PlatformOrbit {
                 this.log.debug('Registering platform accessory');
                 this.api.registerPlatformAccessories(PluginName, PlatformName, [irrigationAccessory]);
                 this.accessories[uuid] = irrigationAccessory;
-
               }
 
               device.openConnection();
@@ -95,12 +97,9 @@ class PlatformOrbit {
 
 
   configureAccessory(accessory) {
-    // Configure handlers for cache accessories
+    // Added cached devices to the accessories arrary
     this.log('Remembered accessory, configuring handlers', accessory.displayName);
     this.accessories[accessory.UUID] = accessory;
-
-    // Configure Irrigation Service
-    this._configureIrrigationService(accessory.getService(Service.IrrigationSystem));
   }
 
 
@@ -340,7 +339,8 @@ class PlatformOrbit {
         break;
 
       case "watering_complete":
-        this.log.debug("Watering_complete");
+      case "device_idle":
+        this.log.debug("Watering_complete or device_idle");
 
         // Update Irrigation System Service
         irrigationSystemService.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
@@ -379,13 +379,6 @@ class PlatformOrbit {
 
       case "rain_delay":
         this.log.debug("rain_delay - do nothing");
-        break;
-
-      case "device_idle":
-        this.log.debug("device_idle");
-
-        // Update Irrigation System Service
-        irrigationSystemService.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
         break;
 
       default:
