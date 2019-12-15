@@ -110,13 +110,13 @@ class PlatformOrbit {
     let newAccessory = new Accessory(name, uuid);
     newAccessory.addService(Service.IrrigationSystem, name);
     newAccessory.updateReachability(true);
-    let irrigationSystem = newAccessory.getService(Service.IrrigationSystem);
+    let irrigationSystemService = newAccessory.getService(Service.IrrigationSystem);
 
     // Check if the device is connected
     if (is_connected == true) {
-      irrigationSystem.setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.NO_FAULT);
+      irrigationSystemService.setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.NO_FAULT);
     } else {
-      irrigationSystem.setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.GENERAL_FAULT);
+      irrigationSystemService.setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.GENERAL_FAULT);
     }
 
     // Create AccessoryInformation Service
@@ -379,6 +379,16 @@ class PlatformOrbit {
 
       case "rain_delay":
         this.log.debug("rain_delay - do nothing");
+        break;
+
+      case "device_connected":
+        this.log.debug("device_connected");
+        irrigationSystem.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.NO_FAULT);
+        break;
+
+      case "device_disconnected":
+        this.log.debug("device_disconnected");
+        irrigationSystem.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.GENERAL_FAULT);
         break;
 
       default:
