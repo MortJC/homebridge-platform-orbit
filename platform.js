@@ -1,6 +1,6 @@
 const PluginName = 'homebridge-platform-orbit';
 const PlatformName = 'orbit';
-const OrbitAPI = require('./OrbitAPI.js');
+const OrbitAPI = require('./orbitapi.js');
 
 class PlatformOrbit {
 
