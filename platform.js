@@ -109,7 +109,6 @@ class PlatformOrbit {
     // Create new Irrigation System Service
     let newAccessory = new Accessory(name, uuid);
     newAccessory.addService(Service.IrrigationSystem, name);
-    newAccessory.updateReachability(true);
     let irrigationSystemService = newAccessory.getService(Service.IrrigationSystem);
 
     // Check if the device is connected
