@@ -107,9 +107,9 @@ class PlatformOrbit {
     this.log.debug('Create Irrigation service', id);
 
     // Create new Irrigation System Service
-    let newAccessory = new Accessory(name, uuid);
-    newAccessory.addService(Service.IrrigationSystem, name);
-    let irrigationSystemService = newAccessory.getService(Service.IrrigationSystem);
+    let newPlatformAccessory = new PlatformAccessory(name, uuid);
+    newPlatformAccessory.addService(Service.IrrigationSystem, name);
+    let irrigationSystemService = newPlatformAccessory.getService(Service.IrrigationSystem);
 
     // Check if the device is connected
     if (is_connected == true) {
@@ -119,14 +119,14 @@ class PlatformOrbit {
     }
 
     // Create AccessoryInformation Service
-    newAccessory.getService(Service.AccessoryInformation)
+    newPlatformAccessory.getService(Service.AccessoryInformation)
       .setCharacteristic(Characteristic.Name, name)
       .setCharacteristic(Characteristic.Manufacturer, "Orbit")
       .setCharacteristic(Characteristic.SerialNumber, id)
       .setCharacteristic(Characteristic.Model, hardware_version)
       .setCharacteristic(Characteristic.FirmwareRevision, firmware_version);
 
-    return newAccessory;
+    return newPlatformAccessory;
   }
 
 

@@ -3,10 +3,10 @@ const PluginName = 'homebridge-platform-orbit';
 const PlatformName = 'orbit';
 
 module.exports = (homebridge) => {
-  global.Accessory = homebridge.platformAccessory;
-  global.Service = homebridge.hap.Service;
-  global.Characteristic = homebridge.hap.Characteristic;
-  global.UUIDGen = homebridge.hap.uuid;
+  PlatformAccessory = homebridge.platformAccessory;
+  Service = homebridge.hap.Service;
+  Characteristic = homebridge.hap.Characteristic;
+  UUIDGen = homebridge.hap.uuid;
 
   homebridge.registerPlatform(PluginName, PlatformName, PlatformOrbit, true);
 };
