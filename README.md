@@ -17,3 +17,6 @@ Orbit Irrigation System platform plugin for [HomeBridge](https://github.com/nfar
 		"password": "MySecretPassword"
 	}
 ]
+
+## Credit
+[codyc1515](https://github.com/codyc1515/homebridge-orbit-bhyve) who's code provide an initial framework as to how to set up various homebridge services and interact with the orbit device.
