@@ -20,3 +20,4 @@ Orbit Irrigation System platform plugin for [HomeBridge](https://github.com/nfar
 ```
 ## Credit
 [codyc1515](https://github.com/codyc1515/homebridge-orbit-bhyve) who's code provide an initial framework as to how to set up various homebridge services and interact with the orbit device.
+[blacksmithlabs](https://github.com/blacksmithlabs/orbit-bhyve-remote) who's code provide the method of using websockets to interact with the orbit device.
