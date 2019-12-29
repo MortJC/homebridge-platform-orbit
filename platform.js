@@ -1,5 +1,3 @@
-const PluginName = 'homebridge-platform-orbit';
-const PlatformName = 'orbit';
 const OrbitAPI = require('./orbitapi.js');
 
 class PlatformOrbit {
@@ -8,23 +6,30 @@ class PlatformOrbit {
   constructor(log, config, api) {
     this.log = log;
     this.config = config;
-    this.email = config["email"];
-    this.password = config["password"];
-    this.accessories = [];
 
-    this.log('Starting OrbitPlatform using homebridge API', api.version);
-    if (api) {
+    if (!config || !config["email"] || !config["password"]) {
+      this.log.error("Platform config incorrect or missing. Check the config.json file.");
+    }
+    else {
 
-      // save the api for use later
-      this.api = api;
+      this.email = config["email"];
+      this.password = config["password"];
+      this.accessories = [];
 
-      // if finished loading cache accessories
-      this.api.on("didFinishLaunching", function () {
+      this.log('Starting OrbitPlatform using homebridge API', api.version);
+      if (api) {
 
-        // Fetch the devices
-        this._fetchDevices();
+        // save the api for use later
+        this.api = api;
 
-      }.bind(this));
+        // if finished loading cache accessories
+        this.api.on("didFinishLaunching", function () {
+
+          // Fetch the devices
+          this._fetchDevices();
+
+        }.bind(this));
+      }
     }
   }
 
