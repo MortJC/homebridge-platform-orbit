@@ -387,12 +387,12 @@ class PlatformOrbit {
 
       case "device_connected":
         this.log.debug("device_connected");
-        irrigationSystem.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.NO_FAULT);
+        irrigationSystemService.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.NO_FAULT);
         break;
 
       case "device_disconnected":
         this.log.debug("device_disconnected");
-        irrigationSystem.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.GENERAL_FAULT);
+        irrigationSystemService.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.GENERAL_FAULT);
         break;
 
       default:
