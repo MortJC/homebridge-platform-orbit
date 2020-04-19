@@ -1,10 +1,10 @@
-// const axios = require('axios');
 const requestpromise = require("request-promise");
-const WebSocket = require('ws');
+const ReconnectingWebSocket = require('reconnecting-websocket');
+const WS = require('ws');
 
 const endpoint = 'https://api.orbitbhyve.com/v1';
 
-const WS_TIMEOUT = 300000;
+const WS_PINGINTERVAL = 25000 // Websocket get's timed out after 30s, so ping every 25s
 
 class OrbitAPI {
     constructor(log, email, password) {
@@ -12,7 +12,7 @@ class OrbitAPI {
         this._email = email;
         this._password = password;
         this._token = null;
-        this._ws = new WebSocketProxy();
+        this._rws = new WebSocketProxy();
 
     }
 
@@ -82,7 +82,7 @@ class OrbitDeviceAPI {
         this._is_connected = is_connected;
         this.log = log;
 
-        this._ws = new WebSocketProxy(log);
+        this._wsp = new WebSocketProxy(log);
         this._zones = [];
     }
 
@@ -94,36 +94,35 @@ class OrbitDeviceAPI {
 
     openConnection() {
         this.log.debug('openConnection');
-        this._ws.connect(this._token, this._id)
+        this._wsp.connect(this._token, this._id)
             .then(ws => ws.send(JSON.stringify({
                 event: "app_connection",
-                orbit_session_token: this._token,
+                orbit_session_token: this._token
             })));
     }
 
-
     onMessage(listner) {
         this.log.debug('onMessage');
-        this._ws.connect(this._token, this._id)
-            .then(ws => ws.on('message', msg => {
-                listner(msg, this._id);
+        this._wsp.connect(this._token, this._id)
+            .then(ws => ws.addEventListener('message', msg => {
+                listner(msg.data, this._id);
             }));
     }
 
 
     sync() {
         this.log.debug('sync');
-        this._ws.connect(this._token, this._id)
+        this._wsp.connect(this._token, this._id)
             .then(ws => ws.send(JSON.stringify({
                 event: "sync",
-                device_id: this._id,
+                device_id: this._id
             })));
     }
 
 
     startZone(station, run_time) {
         this.log.debug('startZone', station, run_time);
-        this._ws.connect(this._token, this._id)
+        this._wsp.connect(this._token, this._id)
             .then(ws => ws.send({
                 event: "change_mode",
                 mode: "manual",
@@ -131,56 +130,46 @@ class OrbitDeviceAPI {
                 timestamp: new Date().toISOString(),
                 stations: [
                     { "station": station, "run_time": run_time }
-                ],
+                ]
             }));
     }
 
 
     stopZone() {
         this.log.debug('stopZone');
-        this._ws.connect(this._token, this._id)
+        this._wsp.connect(this._token, this._id)
             .then(ws => ws.send({
                 event: "change_mode",
                 mode: "manual",
                 device_id: this._id,
                 timestamp: new Date().toISOString(),
-                stations: [],
+                stations: []
             }));
     }
 }
 
 class WebSocketProxy {
     constructor(log) {
-        this._ws = null;
-        this._wsPing = null;
-        this._wsHeartbeat = null;
+        this._rws = null;
+        this._ping = null;
         this.log = log;
     }
 
-    _heartbeat() {
-        clearTimeout(this._wsHeartbeat);
-
-        this._wsHeartbeat = setTimeout(() => {
-            clearInterval(this._wsPing);
-            this._ws.terminate();
-            this._ws = null;
-        }, WS_TIMEOUT);
-    }
-
     connect(token, deviceId) {
-        if (this._ws) {
-            return Promise.resolve(this._ws);
+        if (this._rws) {
+            return Promise.resolve(this._rws);
         }
 
         return new Promise((resolve, reject) => {
-            this._ws = new WebSocket(`${endpoint}/events`);
+            this._rws = new ReconnectingWebSocket(`${endpoint}/events`, [], {
+                WebSocket: WS,
+                connectionTimeout: 1000,
+                maxRetries: 10
+            });
 
             // Intercept send events for logging
-            const origSend = this._ws.send.bind(this._ws);
-            this._ws.send = (data, options, callback) => {
-                if (data.event && data.event !== 'ping') {
-                    this._heartbeat();
-                }
+            const origSend = this._rws.send.bind(this._rws);
+            this._rws.send = (data, options, callback) => {
                 if (typeof data === 'object') {
                     data = JSON.stringify(data);
                 }
@@ -188,34 +177,30 @@ class WebSocketProxy {
                 origSend(data, options, callback);
             };
 
-            this._wsPing = setInterval(() => {
-                this._ws.send({ event: 'ping' });
-            }, 25000);
-
-            this._ws.on('open', () => {
-                this._ws.send({
+            // Open
+            this._rws.addEventListener('open', () => {
+                this._rws.send({
                     event: 'app_connection',
                     orbit_session_token: token,
                     subscribe_device_id: deviceId,
                 });
-
-                this._heartbeat();
-                resolve(this._ws);
+                resolve(this._rws);
             });
 
-            this._ws.on('message', msg => {
-                this.log.debug('RX', msg);
+            // Message
+            this._rws.addEventListener('message', msg => {
+                this.log.debug('RX', msg.data);
             });
 
-            this._ws.on('close', () => {
-                this.log.debug('WebSocket Closed');
-                clearInterval(this._wsPing);
-            });
+            // Ping
+            this._ping = setInterval(() => {
+                this._rws.send({ event: 'ping' });
+            }, WS_PINGINTERVAL);
 
-            this._ws.on('error', msg => {
+            // Error
+            this._rws.addEventListener('error', msg => {
                 this.log.error('WebSocket Error', msg);
-                this._ws.close();
-
+                this._rws.close();
                 reject(msg);
             });
 
