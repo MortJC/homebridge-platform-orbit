@@ -254,7 +254,7 @@ class PlatformOrbit {
         break;
 
       case "ValveInUse":
-        this.log.debug("ValveInUse =", valveService.getCharacteristic(Characteristic.Active).value);
+        this.log.debug("ValveInUse =", valveService.getCharacteristic(Characteristic.InUse).value);
         callback(null, valveService.getCharacteristic(Characteristic.InUse).value);
         break;
 
@@ -331,11 +331,11 @@ class PlatformOrbit {
 
             // Update Valve Services
             if (service.getCharacteristic(Characteristic.ServiceLabelIndex).value == jsonData['current_station']) {
-              service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.ACTIVE);
+              service.getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.ACTIVE);
               service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.IN_USE);
               service.getCharacteristic(Characteristic.RemainingDuration).updateValue(jsonData['run_time'] * 60);
             } else {
-              service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.INACTIVE);
+              service.getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.INACTIVE);
               service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
             }
           }
@@ -354,7 +354,7 @@ class PlatformOrbit {
 
           // Update Valve Service
           if (Service.Valve.UUID === service.UUID) {
-            service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.INACTIVE);
+            service.getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.INACTIVE);
             service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
           }
         });
