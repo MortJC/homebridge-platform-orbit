@@ -1,6 +1,6 @@
-const requestpromise = require("request-promise");
-const ReconnectingWebSocket = require('reconnecting-websocket');
-const WS = require('ws');
+const bent = require('bent');
+const ws = require('ws');
+const reconnectingwebsocket = require('reconnecting-websocket');
 
 const endpoint = 'https://api.orbitbhyve.com/v1';
 
@@ -16,41 +16,39 @@ class OrbitAPI {
 
     }
 
-    getToken() {
+    async getToken() {
         // log us in
-        return requestpromise.post({
-            url: endpoint + "/session",
-            headers: {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "orbit-app-id": "Orbit Support Dashboard",
-                "orbit-api-key": "null"
-            },
-            json: {
-                "session": {
-                    "email": this._email,
-                    "password": this._password
-                }
-            },
-        }).then(function (body) {
-            // Save orbit_api_key
-            this._token = body['orbit_api_key'];
-        }.bind(this));
+        try {
+            const postJSON = bent('POST', 'json');
+            let response = await postJSON(endpoint + "/session",
+                {
+                    "session": {
+                        "email": this._email,
+                        "password": this._password
+                    }
+                },
+                {
+                    "orbit-app-id": "Orbit Support Dashboard",
+                    "orbit-api-key": "null"
+                });
+            this._token = response['orbit_api_key'];
+        } catch (error) {
+            this.log.error(error);
+        }
     }
 
-    getDevices() {
+    async getDevices() {
         let devices = [];
 
         // Get the device details
-        return requestpromise.get({
-            url: endpoint + "/devices",
-            headers: {
-                "Accept": "application/json",
-                "orbit-app-id": "Orbit Support Dashboard",
-                "orbit-api-key": this._token
-            }
-        }).then(function (body) {
-            JSON.parse(body).forEach(function (result) {
+        try {
+            const getJSON = bent('GET', 'json');
+            let response = await getJSON(endpoint + "/devices", {},
+                {
+                    "orbit-app-id": "Orbit Support Dashboard",
+                    "orbit-api-key": this._token
+                });
+            response.forEach(function (result) {
                 if (result['type'] == "sprinkler_timer") {
 
                     // Create the device
@@ -64,9 +62,10 @@ class OrbitAPI {
                     devices.push(device);
                 }
             }.bind(this));
-
             return devices;
-        }.bind(this));
+        } catch (error) {
+            this.log.error(error);
+        }
     }
 
 }
@@ -161,8 +160,8 @@ class WebSocketProxy {
         }
 
         return new Promise((resolve, reject) => {
-            this._rws = new ReconnectingWebSocket(`${endpoint}/events`, [], {
-                WebSocket: WS,
+            this._rws = new reconnectingwebsocket(`${endpoint}/events`, [], {
+                WebSocket: ws,
                 connectionTimeout: 1000,
                 maxRetries: 10
             });
