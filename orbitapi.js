@@ -160,51 +160,59 @@ class WebSocketProxy {
         }
 
         return new Promise((resolve, reject) => {
-            this._rws = new reconnectingwebsocket(`${endpoint}/events`, [], {
-                WebSocket: ws,
-                connectionTimeout: 1000,
-                maxRetries: 10
-            });
+            try {
+                this._rws = new reconnectingwebsocket(`${endpoint}/events`, [], {
+                    WebSocket: ws,
+                    connectionTimeout: 10000,
+                    maxRetries: 10
+                });
 
-            // Intercept send events for logging
-            const origSend = this._rws.send.bind(this._rws);
-            this._rws.send = (data, options, callback) => {
-                if (typeof data === 'object') {
-                    data = JSON.stringify(data);
-                }
-                this.log.debug('TX', data);
-                origSend(data, options, callback);
+                // Intercept send events for logging
+                const origSend = this._rws.send.bind(this._rws);
+                this._rws.send = (data, options, callback) => {
+                    if (typeof data === 'object') {
+                        data = JSON.stringify(data);
+                    }
+                    this.log.debug('TX', data);
+                    origSend(data, options, callback);
+                };
+
+                // Open
+                this._rws.addEventListener('open', () => {
+                    this._rws.send({
+                        event: 'app_connection',
+                        orbit_session_token: token,
+                        subscribe_device_id: deviceId,
+                    });
+                    resolve(this._rws);
+                });
+
+                // Message
+                this._rws.addEventListener('message', msg => {
+                    this.log.debug('RX', msg.data);
+                });
+
+                // Ping
+                this._ping = setInterval(() => {
+                    this._rws.send({ event: 'ping' });
+                }, WS_PINGINTERVAL);
+
+                // Error
+                this._rws.addEventListener('error', msg => {
+                    this.log.error('WebSocket Error', msg);
+                    this._rws.close();
+                    reject(msg);
+                });
+            }
+
+            catch (error)
+            {
+                // Will not execute
+                this.log.error('caught', error.message);
             };
 
-            // Open
-            this._rws.addEventListener('open', () => {
-                this._rws.send({
-                    event: 'app_connection',
-                    orbit_session_token: token,
-                    subscribe_device_id: deviceId,
-                });
-                resolve(this._rws);
-            });
-
-            // Message
-            this._rws.addEventListener('message', msg => {
-                this.log.debug('RX', msg.data);
-            });
-
-            // Ping
-            this._ping = setInterval(() => {
-                this._rws.send({ event: 'ping' });
-            }, WS_PINGINTERVAL);
-
-            // Error
-            this._rws.addEventListener('error', msg => {
-                this.log.error('WebSocket Error', msg);
-                this._rws.close();
-                reject(msg);
-            });
-
-        });
-    }
+    });
+}
 }
 
 module.exports = OrbitAPI;
