@@ -93,6 +93,7 @@ class PlatformOrbit {
               device.openConnection();
               device.onMessage(this._processMessage.bind(this));
 
+              // Send Sync after 2 sec delay
               setTimeout(() => { device.sync(); }, 2000);
 
             }.bind(this));
@@ -157,9 +158,6 @@ class PlatformOrbit {
       .getCharacteristic(Characteristic.ProgramMode)
       .on('get', this._getDeviceValue.bind(this, irrigationSystemService, "DeviceProgramMode"));
 
-    irrigationSystemService
-      .getCharacteristic(Characteristic.RemainingDuration)
-      .on('get', this._getDeviceValue.bind(this, irrigationSystemService, "DeviceRemainingDuration"));
   }
 
 
@@ -178,6 +176,9 @@ class PlatformOrbit {
       .setCharacteristic(Characteristic.ServiceLabelIndex, id)
       .setCharacteristic(Characteristic.StatusFault, Characteristic.StatusFault.NO_FAULT)
       .setCharacteristic(Characteristic.Name, name);
+
+    // Use CurrentTime to store the run time ending
+    valve.addCharacteristic(Characteristic.CurrentTime);
 
     return valve
   }
@@ -229,11 +230,6 @@ class PlatformOrbit {
         callback(null, irrigationSystemService.getCharacteristic(Characteristic.InUse).value);
         break;
 
-      case "DeviceRemainingDuration":
-        this.log.debug("DeviceRemainingDuration =", irrigationSystemService.getCharacteristic(Characteristic.RemainingDuration).value);
-        callback(null, irrigationSystemService.getCharacteristic(Characteristic.RemainingDuration).value);
-        break;
-
       default:
         this.log.debug("Unknown CharacteristicName called", characteristicName);
         callback();
@@ -264,8 +260,13 @@ class PlatformOrbit {
         break;
 
       case "ValveRemainingDuration":
-        this.log.debug("ValveRemainingDuration =", valveService.getCharacteristic(Characteristic.RemainingDuration).value);
-        callback(null, valveService.getCharacteristic(Characteristic.RemainingDuration).value);
+        // Calc remain duration
+        let timeEnding = new Date(parseInt(valveService.getCharacteristic(Characteristic.CurrentTime).value));
+        let timeNow = Date.now();
+        let timeRemaining = Math.max(Math.round((timeEnding - timeNow) / 1000), 0);
+        valveService.getCharacteristic(Characteristic.RemainingDuration).updateValue(timeRemaining);
+        this.log.debug("ValveRemainingDuration =", timeRemaining);
+        callback(null, timeRemaining);
         break;
 
       default:
@@ -323,7 +324,6 @@ class PlatformOrbit {
 
         // Update Irrigation System Service
         irrigationSystemService.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.IN_USE);
-        irrigationSystemService.getCharacteristic(Characteristic.RemainingDuration).updateValue(jsonData['run_time'] * 60);
 
         // Find the valve Services
         irrigationAccessory.services.forEach(function (service) {
@@ -334,6 +334,7 @@ class PlatformOrbit {
               service.getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.ACTIVE);
               service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.IN_USE);
               service.getCharacteristic(Characteristic.RemainingDuration).updateValue(jsonData['run_time'] * 60);
+              service.getCharacteristic(Characteristic.CurrentTime).updateValue(Date.now() + parseInt(jsonData['run_time']) * 60 * 1000); // Store timeEnding
             } else {
               service.getCharacteristic(Characteristic.Active).updateValue(Characteristic.Active.INACTIVE);
               service.getCharacteristic(Characteristic.InUse).updateValue(Characteristic.InUse.NOT_IN_USE);
