@@ -97,8 +97,13 @@ class PlatformOrbit {
               setTimeout(() => { device.sync(); }, 2000);
 
             }.bind(this));
+          }.bind(this)).catch(function (error) {
+            this.log.error('Unable to get devices', error);
           }.bind(this));
       }.bind(this))
+      .catch(function (error) {
+        this.log.error('Unable to get token', error);
+      }.bind(this));
   }
 
 

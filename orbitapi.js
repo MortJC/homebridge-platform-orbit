@@ -33,7 +33,7 @@ class OrbitAPI {
                 });
             this._token = response['orbit_api_key'];
         } catch (error) {
-            this.log.error(error);
+            throw error;
         }
     }
 
@@ -64,7 +64,7 @@ class OrbitAPI {
             }.bind(this));
             return devices;
         } catch (error) {
-            this.log.error(error);
+            throw error;
         }
     }
 
@@ -205,14 +205,13 @@ class WebSocketProxy {
                 });
             }
 
-            catch (error)
-            {
+            catch (error) {
                 // Will not execute
                 this.log.error('caught', error.message);
             };
 
-    });
-}
+        });
+    }
 }
 
 module.exports = OrbitAPI;
