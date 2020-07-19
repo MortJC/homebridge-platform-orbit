@@ -1,6 +1,6 @@
 # Changes
 
-## 1.4.2
+## 1.4.3
 
 - [Enhancement] Added config.schame.json to enable Homebridge Config UI
 
