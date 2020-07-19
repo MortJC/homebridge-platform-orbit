@@ -1,0 +1,27 @@
+{
+    "pluginAlias": "orbit",
+    "pluginType": "platform",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "title": "Name",
+                "type": "string",
+                "default": "orbit",
+                "required": true
+            },
+            "email": {
+                "title": "Email",
+                "type": "string",
+                "default": "joe.blogs@gmail.com",
+                "required": true
+            },
+            "password": {
+                "title": "Password",
+                "type": "string",
+                "default": "MySecretPassword",
+                "required": true
+            }
+        }
+    }
+}
