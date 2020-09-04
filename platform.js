@@ -391,6 +391,14 @@ class PlatformOrbit {
         this.log.debug("rain_delay - do nothing");
         break;
 
+      case "flow_sensor_state_changed":
+        this.log.debug("flow_sensor_state_changed - do nothing");
+        break;
+
+      case "clear_low_battery":
+        this.log.debug("clear_low_battery - do nothing");
+        break;
+
       case "device_connected":
         this.log.debug("device_connected");
         irrigationSystemService.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.NO_FAULT);
