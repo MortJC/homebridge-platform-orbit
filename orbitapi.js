@@ -164,7 +164,9 @@ class WebSocketProxy {
                 this._rws = new reconnectingwebsocket(`${endpoint}/events`, [], {
                     WebSocket: ws,
                     connectionTimeout: 10000,
-                    maxRetries: 10
+                    maxReconnectionDelay: 64000,
+                    minReconnectionDelay: 2000,
+                    reconnectionDelayGrowFactor: 2
                 });
 
                 // Intercept send events for logging
