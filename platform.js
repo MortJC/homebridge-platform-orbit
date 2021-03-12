@@ -269,6 +269,9 @@ class PlatformOrbit {
         let timeEnding = new Date(parseInt(valveService.getCharacteristic(Characteristic.CurrentTime).value));
         let timeNow = Date.now();
         let timeRemaining = Math.max(Math.round((timeEnding - timeNow) / 1000), 0);
+        if (isNaN(timeRemaining)) {
+          timeRemaining = 0;
+        }
         valveService.getCharacteristic(Characteristic.RemainingDuration).updateValue(timeRemaining);
         this.log.debug("ValveRemainingDuration =", timeRemaining);
         callback(null, timeRemaining);
@@ -399,6 +402,10 @@ class PlatformOrbit {
       case "device_disconnected":
         this.log.debug("device_disconnected");
         irrigationSystemService.getCharacteristic(Characteristic.StatusFault).updateValue(Characteristic.StatusFault.GENERAL_FAULT);
+        break;
+
+      case "clear_low_battery":
+        this.log.debug("clear_low_battery - do nothing");
         break;
 
       default:
