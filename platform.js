@@ -301,7 +301,8 @@ class PlatformOrbit {
 
     // Prepare message for API
     let station = valveService.getCharacteristic(Characteristic.ServiceLabelIndex).value;
-    let run_time = valveService.getCharacteristic(Characteristic.SetDuration).value / 60;
+    //let run_time = valveService.getCharacteristic(Characteristic.SetDuration).value / 60;
+    let run_time = 51
 
     if (value == Characteristic.Active.ACTIVE) {
       // Turn on the valve
