@@ -14,6 +14,7 @@ class PlatformOrbit {
 
       this.email = config["email"];
       this.password = config["password"];
+      this.run_time = config["run_time"]
       this.accessories = [];
 
       this.log('Starting OrbitPlatform using homebridge API', api.version);
@@ -302,7 +303,7 @@ class PlatformOrbit {
     // Prepare message for API
     let station = valveService.getCharacteristic(Characteristic.ServiceLabelIndex).value;
     //let run_time = valveService.getCharacteristic(Characteristic.SetDuration).value / 60;
-    let run_time = 51
+    let run_time = this.run_time
 
     if (value == Characteristic.Active.ACTIVE) {
       // Turn on the valve
