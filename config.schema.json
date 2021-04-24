@@ -21,6 +21,12 @@
                 "type": "string",
                 "default": "MySecretPassword",
                 "required": true
+            },
+            "run_time": {
+                "title": "Run time",
+                "type": "integer",
+                "default": 50,
+                "required": true
             }
         }
     }
