@@ -2,7 +2,7 @@ const bent = require('bent');
 const ws = require('ws');
 const reconnectingwebsocket = require('reconnecting-websocket');
 
-const endpoint = 'https://api.orbitbhyve.com/v1';
+const endpoint = 'wss://api.orbitbhyve.com/v1';
 
 const WS_PINGINTERVAL = 25000 // Websocket get's timed out after 30s, so ping every 25s
 
