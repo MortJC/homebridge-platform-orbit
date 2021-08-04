@@ -2,7 +2,8 @@ const bent = require('bent');
 const ws = require('ws');
 const reconnectingwebsocket = require('reconnecting-websocket');
 
-const endpoint = 'wss://api.orbitbhyve.com/v1';
+const endpoint = 'https://api.orbitbhyve.com/v1';
+const ws_endpoint = 'wss://api.orbitbhyve.com/v1';
 
 const WS_PINGINTERVAL = 25000 // Websocket get's timed out after 30s, so ping every 25s
 
@@ -74,26 +75,26 @@ class OrbitAPI {
 class OrbitDeviceAPI {
     constructor(log, token, id, name, hardware_version, firmware_version, is_connected) {
         this._token = token;
-        this._id = id;
-        this._name = name;
-        this._hardware_version = hardware_version;
-        this._firmware_version = firmware_version;
-        this._is_connected = is_connected;
+        this.id = id;
+        this.name = name;
+        this.hardware_version = hardware_version;
+        this.firmware_version = firmware_version;
+        this.is_connected = is_connected;
         this.log = log;
 
         this._wsp = new WebSocketProxy(log);
-        this._zones = [];
+        this.zones = [];
     }
 
 
     _addZone(station, name) {
-        this._zones.push({ "station": station, "name": name });
+        this.zones.push({ "station": station, "name": name });
     }
 
 
     openConnection() {
         this.log.debug('openConnection');
-        this._wsp.connect(this._token, this._id)
+        this._wsp.connect(this._token, this.id)
             .then(ws => ws.send(JSON.stringify({
                 event: "app_connection",
                 orbit_session_token: this._token
@@ -102,16 +103,16 @@ class OrbitDeviceAPI {
 
     onMessage(listner) {
         this.log.debug('onMessage');
-        this._wsp.connect(this._token, this._id)
+        this._wsp.connect(this._token, this.id)
             .then(ws => ws.addEventListener('message', msg => {
-                listner(msg.data, this._id);
+                listner(msg.data);
             }));
     }
 
 
     sync() {
         this.log.debug('sync');
-        this._wsp.connect(this._token, this._id)
+        this._wsp.connect(this._token, this.id)
             .then(ws => ws.send(JSON.stringify({
                 event: "sync",
                 device_id: this._id
@@ -121,11 +122,11 @@ class OrbitDeviceAPI {
 
     startZone(station, run_time) {
         this.log.debug('startZone', station, run_time);
-        this._wsp.connect(this._token, this._id)
+        this._wsp.connect(this._token, this.id)
             .then(ws => ws.send({
                 event: "change_mode",
                 mode: "manual",
-                device_id: this._id,
+                device_id: this.id,
                 timestamp: new Date().toISOString(),
                 stations: [
                     { "station": station, "run_time": run_time }
@@ -136,11 +137,11 @@ class OrbitDeviceAPI {
 
     stopZone() {
         this.log.debug('stopZone');
-        this._wsp.connect(this._token, this._id)
+        this._wsp.connect(this._token, this.id)
             .then(ws => ws.send({
                 event: "change_mode",
                 mode: "manual",
-                device_id: this._id,
+                device_id: this.id,
                 timestamp: new Date().toISOString(),
                 stations: []
             }));
@@ -161,7 +162,7 @@ class WebSocketProxy {
 
         return new Promise((resolve, reject) => {
             try {
-                this._rws = new reconnectingwebsocket(`${endpoint}/events`, [], {
+                this._rws = new reconnectingwebsocket(`${ws_endpoint}/events`, [], {
                     WebSocket: ws,
                     connectionTimeout: 10000,
                     maxReconnectionDelay: 64000,
