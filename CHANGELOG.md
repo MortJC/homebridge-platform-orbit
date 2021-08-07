@@ -1,5 +1,10 @@
 # Changes
 
+## 1.5.1
+
+- [Enhancement] Converted to TypeScript
+- [Enhancement] Reworked code to simplify functions
+
 ## 1.4.5
 
 - [Fix] Add handling of no time remaining
