@@ -21,7 +21,6 @@ export class OrbitAPI {
         this.email = email;
         this.password = password;
         this.token = "";
-
     }
 
     async login() {

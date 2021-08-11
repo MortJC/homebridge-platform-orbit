@@ -17,7 +17,7 @@ export = (api: API) => {
   api.registerPlatform(PluginName, PlatformName, PlatformOrbit);
 };
 
-import { OrbitAPI, OrbitDeviceAPI } from './orbitapi.js';
+import { OrbitAPI, OrbitDeviceAPI } from './orbitapi';
 
 class PlatformOrbit {
   private readonly email: string = "";
@@ -25,8 +25,7 @@ class PlatformOrbit {
   private accessories: { [uuid: string]: PlatformAccessory } = {};
 
 
-  constructor(public readonly log: Logger, public readonly config: PlatformConfig, public readonly api: API
-  ) {
+  constructor(public readonly log: Logger, public readonly config: PlatformConfig, public readonly api: API) {
     if (!config || !config["email"] || !config["password"]) {
       this.log.error("Platform config incorrect or missing. Check the config.json file.");
     }
@@ -35,6 +34,7 @@ class PlatformOrbit {
       this.email = config["email"];
       this.password = config["password"];
 
+      this.log.info('Starting PlatformOrbit using homebridge API', api.version);
       if (api) {
 
         // save the api for use later
@@ -44,7 +44,7 @@ class PlatformOrbit {
         this.api.on("didFinishLaunching", () => {
 
           // Load the orbit devices
-          this._loadDevices();
+          this.loadDevices();
 
         });
       }
@@ -52,11 +52,11 @@ class PlatformOrbit {
   }
 
 
-  _loadDevices() {
+  loadDevices() {
     this.log.debug("Loading the devices");
 
     // login to the API and get the token
-    let orbitAPI = new OrbitAPI(this.log, this.email, this.password);
+    let orbitAPI: OrbitAPI = new OrbitAPI(this.log, this.email, this.password);
     orbitAPI.login()
       .then(() => {
 
