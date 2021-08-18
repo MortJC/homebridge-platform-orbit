@@ -44,8 +44,8 @@ export class OrbitAPI {
         }
     }
 
-    async getDevices(): Promise<OrbitDeviceAPI[]> {
-        let devices: OrbitDeviceAPI[] = [];
+    async getDevices(): Promise<OrbitDevice[]> {
+        let devices: OrbitDevice[] = [];
 
         // Get the device details
         try {
@@ -59,7 +59,7 @@ export class OrbitAPI {
                 if (result['type'] == "sprinkler_timer") {
 
                     // Create the device
-                    let device = new OrbitDeviceAPI(this.log, this.token, result['id'], result['name'], result['hardware_version'], result['firmware_version'], result['is_connected']);
+                    let device = new OrbitDevice(this.log, this.token, result['id'], result['name'], result['hardware_version'], result['firmware_version'], result['is_connected']);
 
                     // Create zones
                     result['zones'].forEach((zone: any) => {
@@ -78,7 +78,7 @@ export class OrbitAPI {
 }
 
 
-export class OrbitDeviceAPI {
+export class OrbitDevice {
     private readonly log: Logger;
     private readonly token: string;
     public readonly id: string;

@@ -17,13 +17,12 @@ export = (api: API) => {
   api.registerPlatform(PluginName, PlatformName, PlatformOrbit);
 };
 
-import { OrbitAPI, OrbitDeviceAPI } from './orbitapi';
+import { OrbitAPI, OrbitDevice } from './orbitapi';
 
 class PlatformOrbit {
   private readonly email: string = "";
   private readonly password: string = "";
   private accessories: { [uuid: string]: PlatformAccessory } = {};
-
 
   constructor(public readonly log: Logger, public readonly config: PlatformConfig, public readonly api: API) {
     if (!config || !config["email"] || !config["password"]) {
@@ -62,10 +61,10 @@ class PlatformOrbit {
 
         // get an array of the devices
         orbitAPI.getDevices()
-          .then((devices: OrbitDeviceAPI[]) => {
+          .then((devices: OrbitDevice[]) => {
 
             // loop through each device
-            devices.forEach((device: OrbitDeviceAPI) => {
+            devices.forEach((device: OrbitDevice) => {
 
               // Generate irrigation service uuid
               const uuid: string = hap.uuid.generate(device.id);
@@ -76,7 +75,6 @@ class PlatformOrbit {
 
                 // Setup Irrigation Accessory and Irrigation Service
                 let irrigationAccessory = this.accessories[uuid];
-                irrigationAccessory.context.device = device;
                 irrigationAccessory.context.timeEnding = [];
                 this.api.updatePlatformAccessories([irrigationAccessory]);
                 this.configureIrrigationService(irrigationAccessory.getService(hap.Service.IrrigationSystem)!);
@@ -86,7 +84,7 @@ class PlatformOrbit {
                   if (hap.Service.Valve.UUID === service.UUID) {
 
                     // Configure Valve Service
-                    this.configureValveService(irrigationAccessory, service);
+                    this.configureValveService(irrigationAccessory, service, device);
                   }
                 });
               }
@@ -95,16 +93,15 @@ class PlatformOrbit {
 
                 // Create Irrigation Accessory and Irrigation Service
                 let irrigationAccessory = new this.api.platformAccessory(device.name, uuid);
-                irrigationAccessory.context.device = device;
                 irrigationAccessory.context.timeEnding = [];
-                let irrigationSystemService = this.createIrrigationService(irrigationAccessory);
+                let irrigationSystemService = this.createIrrigationService(irrigationAccessory, device);
                 this.configureIrrigationService(irrigationSystemService);
 
                 // Create and configure Values services and link to Irrigation Service
                 device.zones.forEach((zone: any) => {
                   let valveService = this.createValveService(irrigationAccessory, zone['station'], zone['name']);
                   irrigationSystemService.addLinkedService(valveService);
-                  this.configureValveService(irrigationAccessory, valveService);
+                  this.configureValveService(irrigationAccessory, valveService, device);
                 });
 
                 // Register platform accessory
@@ -135,25 +132,25 @@ class PlatformOrbit {
   }
 
 
-  createIrrigationService(irrigationAccessory: PlatformAccessory): Service {
-    this.log.debug('Create Irrigation service', irrigationAccessory.context.device.id);
+  createIrrigationService(irrigationAccessory: PlatformAccessory, device: OrbitDevice): Service {
+    this.log.debug('Create Irrigation service', device.id);
 
     // Update AccessoryInformation Service
     irrigationAccessory.getService(hap.Service.AccessoryInformation)!
-      .setCharacteristic(hap.Characteristic.Name, irrigationAccessory.context.device.name)
+      .setCharacteristic(hap.Characteristic.Name, device.name)
       .setCharacteristic(hap.Characteristic.Manufacturer, "Orbit")
-      .setCharacteristic(hap.Characteristic.SerialNumber, irrigationAccessory.context.device.id)
-      .setCharacteristic(hap.Characteristic.Model, irrigationAccessory.context.device.hardware_version)
-      .setCharacteristic(hap.Characteristic.FirmwareRevision, irrigationAccessory.context.device.firmware_version);
+      .setCharacteristic(hap.Characteristic.SerialNumber, device.id)
+      .setCharacteristic(hap.Characteristic.Model, device.hardware_version)
+      .setCharacteristic(hap.Characteristic.FirmwareRevision, device.firmware_version);
 
     // Add Irrigation System Service
-    let irrigationSystemService = irrigationAccessory.addService(hap.Service.IrrigationSystem, irrigationAccessory.context.device.name)
-      .setCharacteristic(hap.Characteristic.Name, irrigationAccessory.context.device.name)
+    let irrigationSystemService = irrigationAccessory.addService(hap.Service.IrrigationSystem, device.name)
+      .setCharacteristic(hap.Characteristic.Name, device.name)
       .setCharacteristic(hap.Characteristic.Active, hap.Characteristic.Active.ACTIVE)
       .setCharacteristic(hap.Characteristic.InUse, hap.Characteristic.InUse.NOT_IN_USE)
       .setCharacteristic(hap.Characteristic.ProgramMode, hap.Characteristic.ProgramMode.NO_PROGRAM_SCHEDULED)
       .setCharacteristic(hap.Characteristic.RemainingDuration, 0)
-      .setCharacteristic(hap.Characteristic.StatusFault, irrigationAccessory.context.device.is_connected ? hap.Characteristic.StatusFault.NO_FAULT : hap.Characteristic.StatusFault.GENERAL_FAULT);
+      .setCharacteristic(hap.Characteristic.StatusFault, device.is_connected ? hap.Characteristic.StatusFault.NO_FAULT : hap.Characteristic.StatusFault.GENERAL_FAULT);
 
     return irrigationSystemService;
   }
@@ -224,7 +221,7 @@ class PlatformOrbit {
   }
 
 
-  configureValveService(irrigationAccessory: PlatformAccessory, valveService: Service) {
+  configureValveService(irrigationAccessory: PlatformAccessory, valveService: Service, device: OrbitDevice) {
     this.log.debug("Configure Valve service", valveService.getCharacteristic(hap.Characteristic.Name).value);
 
     // Configure Valve Service
@@ -236,17 +233,17 @@ class PlatformOrbit {
       })
       .onSet((value) => {
         // Prepare message for API
-        let station = valveService.getCharacteristic(hap.Characteristic.ServiceLabelIndex).value;
+        let station = valveService.getCharacteristic(hap.Characteristic.ServiceLabelIndex).value as number;
         let run_time = valveService.getCharacteristic(hap.Characteristic.SetDuration).value as number / 60;
 
         if (value == hap.Characteristic.Active.ACTIVE) {
           // Turn on the valve
           this.log.info("Start zone", valveService.getCharacteristic(hap.Characteristic.Name).value, "for", run_time, "mins");
-          irrigationAccessory.context.device.startZone(station, run_time);
+          device.startZone(station, run_time);
         } else {
           // Turn off the valve
           this.log.info("Stop zone", valveService.getCharacteristic(hap.Characteristic.Name).value);
-          irrigationAccessory.context.device.stopZone();
+          device.stopZone();
         }
       });
 
@@ -322,7 +319,7 @@ class PlatformOrbit {
     switch (jsonData['event']) {
 
       case "watering_in_progress_notification":
-        this.log.debug("Watering_in_progress_notification Station", "device =", irrigationAccessory.context.device.name, "station =", jsonData['current_station'], "Runtime =", jsonData['run_time']);
+        this.log.debug("Watering_in_progress_notification Station", "device =", irrigationSystemService.getCharacteristic(hap.Characteristic.Name).value, "station =", jsonData['current_station'], "Runtime =", jsonData['run_time']);
 
         // Update Irrigation System Service
         irrigationSystemService.getCharacteristic(hap.Characteristic.InUse).updateValue(hap.Characteristic.InUse.IN_USE);

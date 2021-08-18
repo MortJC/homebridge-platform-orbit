@@ -1,5 +1,9 @@
 # Changes
 
+## 1.5.2
+
+- [Fix] Removed unnecessary caching of device
+
 ## 1.5.1
 
 - [Enhancement] Converted to TypeScript
