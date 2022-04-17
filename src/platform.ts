@@ -403,7 +403,7 @@ class PlatformOrbit {
         break;
 
       default:
-        this.log.warn("Unhandled message received: " + jsonData['event']);
+        this.log.debug("Unhandled message received: " + jsonData['event']);
         break;
     }
   }

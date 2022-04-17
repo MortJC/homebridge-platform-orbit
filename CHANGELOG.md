@@ -1,5 +1,9 @@
 # Changes
 
+## 1.5.3
+
+- [Enhancement] Changed unhandled message to debug to reduce unnecessary logging
+
 ## 1.5.2
 
 - [Fix] Removed unnecessary caching of device
